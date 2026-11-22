@@ -1,13 +1,12 @@
-import fitz  # PyMuPDF
+import pymupdf
 from typing import List, Dict, Any
 
 
 def parse_pdf(file_path: str) -> List[Dict[str, Any]]:
     """Reads PDF and extracts text and word-level coordinates per page using PyMuPDF."""
     pages_data: List[Dict[str, Any]] = []
-    with fitz.open(file_path) as doc:
+    with pymupdf.open(file_path) as doc:
         for page_num, page in enumerate(doc, start=1):
-            # PyMuPDF returns (x0, y0, x1, y1, word, block_no, line_no, word_no)
             raw_words = page.get_text("words")
             words = [
                 {
