@@ -1,16 +1,28 @@
-import pdfplumber
+import fitz  # PyMuPDF
 from typing import List, Dict, Any
 
+
 def parse_pdf(file_path: str) -> List[Dict[str, Any]]:
-    """Reads PDF and extracts text and word-level coordinates per page."""
-    pages_data = []
-    with pdfplumber.open(file_path) as pdf:
-        for page_num, page in enumerate(pdf.pages, start=1):
-            words = page.extract_words()
-            text = page.extract_text() or ""
+    """Reads PDF and extracts text and word-level coordinates per page using PyMuPDF."""
+    pages_data: List[Dict[str, Any]] = []
+    with fitz.open(file_path) as doc:
+        for page_num, page in enumerate(doc, start=1):
+            # PyMuPDF returns (x0, y0, x1, y1, word, block_no, line_no, word_no)
+            raw_words = page.get_text("words")
+            words = [
+                {
+                    "text": w[4],
+                    "x0": w[0],
+                    "top": w[1],
+                    "x1": w[2],
+                    "bottom": w[3],
+                }
+                for w in raw_words
+            ]
+            text = page.get_text("text") or ""
             pages_data.append({
                 "page_number": page_num,
                 "text": text,
-                "words": words  # Contains 'text', 'x0', 'top', 'x1', 'bottom'
+                "words": words,
             })
     return pages_data

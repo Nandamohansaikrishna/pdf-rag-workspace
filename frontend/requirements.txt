@@ -1,4 +1,5 @@
 streamlit[auth]>=1.67,<2
+pymupdf
 pypdf
 pdfplumber
 python-dotenv

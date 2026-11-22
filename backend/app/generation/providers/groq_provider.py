@@ -2,31 +2,31 @@ import os
 from groq import Groq
 from backend.app.core.config import settings
 
+_groq_client = None
 
-def generate_groq_answer(
-    prompt: str,
-    system_message: str = "You are a helpful AI assistant.",
-    model: str | None = None,
-) -> str | None:
-    """Generates an answer using the Groq API for cloud deployment."""
-    api_key = settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY")
-    if not api_key:
-        print("Groq API Error: GROQ_API_KEY is not set.")
-        return None
 
-    selected_model = model or os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
-    client = Groq(api_key=api_key, timeout=30.0)
+def _get_groq_client() -> Groq:
+    global _groq_client
+    if _groq_client is None:
+        api_key = os.getenv("GROQ_API_KEY") or settings.GROQ_API_KEY
+        if not api_key:
+            raise ValueError("GROQ_API_KEY is not set.")
+        _groq_client = Groq(api_key=api_key, timeout=30.0)
+    return _groq_client
 
-    try:
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": prompt},
-            ],
-            model=selected_model,
-            temperature=0.0,
+
+def call_groq(messages: list[dict], temperature: float = 0.1, max_tokens: int = 1024) -> str:
+    model = os.getenv("GROQ_MODEL") or settings.GROQ_MODEL or "openai/gpt-oss-20b"
+    kwargs = dict(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    if "gpt-oss" in model:
+        kwargs["reasoning_effort"] = (
+            os.getenv("GROQ_REASONING_EFFORT") or settings.GROQ_REASONING_EFFORT or "low"
         )
-        return chat_completion.choices[0].message.content
-    except Exception as e:
-        print(f"Groq API Error: {e}")
-        return None
+
+    response = _get_groq_client().chat.completions.create(**kwargs)
+    return response.choices[0].message.content or ""
