@@ -1,3 +1,4 @@
+import os
 import threading
 import uuid
 from fastembed.rerank.cross_encoder import TextCrossEncoder
@@ -6,7 +7,6 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 from backend.app.core.config import settings
 from backend.app.retrieval.embedder import embed_texts
 
-# Thread-safe singletons so Streamlit reruns never collide on disk locks or slow down cold starts
 _client = None
 _client_lock = threading.Lock()
 
@@ -28,7 +28,10 @@ def get_reranker() -> TextCrossEncoder:
     if _reranker is None:
         with _reranker_lock:
             if _reranker is None:
-                _reranker = TextCrossEncoder(model_name=settings.RERANK_MODEL)
+                _reranker = TextCrossEncoder(
+                    model_name=settings.RERANK_MODEL,
+                    threads=1,
+                )
     return _reranker
 
 
@@ -67,9 +70,9 @@ def search(collection_name: str, query: str, top_k: int = 5):
         return []
 
     query_vector = embed_texts([query])[0]
+    use_reranker = os.getenv("DISABLE_RERANKER", "0") != "1"
 
-    # STAGE 1: Widen the net (Top 50) from Qdrant
-    fetch_k = 50
+    fetch_k = 20 if use_reranker else top_k
     hits = client.query_points(
         collection_name=collection_name,
         query=query_vector,
@@ -81,9 +84,11 @@ def search(collection_name: str, query: str, top_k: int = 5):
 
     retrieved_chunks = [{"score": hit.score, "payload": hit.payload} for hit in hits]
 
-    # STAGE 2: Lightweight ONNX Cross-Encoder Reranking (via FastEmbed)
+    if not use_reranker:
+        return retrieved_chunks[:top_k]
+
     documents = [chunk["payload"]["text"] for chunk in retrieved_chunks]
-    cross_scores = list(get_reranker().rerank(query, documents))
+    cross_scores = list(get_reranker().rerank(query, documents, batch_size=8))
 
     for i, cross_score in enumerate(cross_scores):
         retrieved_chunks[i]["cross_score"] = float(cross_score)
