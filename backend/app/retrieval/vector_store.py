@@ -1,8 +1,8 @@
 import threading
 import uuid
+from fastembed.rerank.cross_encoder import TextCrossEncoder
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
-from sentence_transformers import CrossEncoder
+from qdrant_client.models import Distance, PointStruct, VectorParams
 from backend.app.core.config import settings
 from backend.app.retrieval.embedder import embed_texts
 
@@ -23,12 +23,12 @@ def get_client() -> QdrantClient:
     return _client
 
 
-def get_reranker() -> CrossEncoder:
+def get_reranker() -> TextCrossEncoder:
     global _reranker
     if _reranker is None:
         with _reranker_lock:
             if _reranker is None:
-                _reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+                _reranker = TextCrossEncoder(model_name=settings.RERANK_MODEL)
     return _reranker
 
 
@@ -81,12 +81,12 @@ def search(collection_name: str, query: str, top_k: int = 5):
 
     retrieved_chunks = [{"score": hit.score, "payload": hit.payload} for hit in hits]
 
-    # STAGE 2: Cross-Encoder Reranking
-    pairs = [[query, chunk["payload"]["text"]] for chunk in retrieved_chunks]
-    cross_scores = get_reranker().predict(pairs)
+    # STAGE 2: Lightweight ONNX Cross-Encoder Reranking (via FastEmbed)
+    documents = [chunk["payload"]["text"] for chunk in retrieved_chunks]
+    cross_scores = list(get_reranker().rerank(query, documents))
 
-    for i in range(len(retrieved_chunks)):
-        retrieved_chunks[i]["cross_score"] = float(cross_scores[i])
+    for i, cross_score in enumerate(cross_scores):
+        retrieved_chunks[i]["cross_score"] = float(cross_score)
 
     reranked_chunks = sorted(
         retrieved_chunks, key=lambda x: x["cross_score"], reverse=True
