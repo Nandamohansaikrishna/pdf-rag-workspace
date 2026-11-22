@@ -1,0 +1,2 @@
+{"id": "q1", "question": "What library does the T5 team leverage for ease of implementation of model and data parallelism?", "type": "easy", "split": "dev", "answerable": true, "reference_answer": "Mesh TensorFlow", "doc": "t5.pdf", "pages": [5]}
+{"id": "q10", "question": "What is the CEO's favorite color?", "type": "unanswerable", "split": "test", "answerable": false, "reference_answer": null, "doc": null, "pages": []}

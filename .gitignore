@@ -1,0 +1,12 @@
+# Secrets
+.env
+.streamlit/secrets.toml
+
+# Local virtual environment & Python caches
+.venv/
+__pycache__/
+*.pyc
+
+# Local app data & vector store
+recent_pdfs/
+qdrant_data/

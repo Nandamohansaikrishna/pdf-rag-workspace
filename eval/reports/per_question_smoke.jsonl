@@ -1,0 +1,1 @@
+{"id": "q1", "question": "How many steps was the base model trained on the Colossal Clean Crawled Corpus?", "gold_pages": [5], "retrieved_pages": [3, 3, 7, 7, 5], "hit": true, "mrr": 0.2}

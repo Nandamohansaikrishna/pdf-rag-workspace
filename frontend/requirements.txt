@@ -1,0 +1,14 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+streamlit[auth]>=1.67,<2
+pypdf
+pdfplumber
+python-dotenv
+pydantic-settings
+qdrant-client
+fastembed
+sentence-transformers
+openai
+groq
+ollama
+requests

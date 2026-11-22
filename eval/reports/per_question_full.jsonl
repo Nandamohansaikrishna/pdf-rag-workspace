@@ -1,0 +1,1 @@
+{"id": "q1", "question": "What library does the T5 team leverage for ease of implementation of model and data parallelism?", "hit": true, "mrr": 1.0, "generated_answer": "Mesh TensorFlow."}
