@@ -11,7 +11,7 @@ def answer_question(
     collection_name: str = "documents",
     provider_override: str | None = None,
 ):
-    # 1. Two-stage retrieval (Qdrant + Cross-Encoder Reranker)
+    # 1. Two-stage retrieval (Qdrant + Hybrid BM25 / Cross-Encoder Reranker)
     results = search(collection_name, query, top_k=5)
     if not results:
         return {
@@ -40,27 +40,33 @@ def answer_question(
     # 2. Format system prompt with retrieved context
     formatted_system_prompt = SYSTEM_PROMPT.format(context="\n\n".join(context_parts))
 
-    # 3. Smart Routing: UI override takes priority, otherwise fall back to .env setting
-    provider_choice = (provider_override or settings.LLM_PROVIDER).lower().strip()
-    groq_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
-    ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5:latest")
+    # 3. Smart Routing: UI override -> env var -> .env default
+    provider_choice = (
+        provider_override or os.getenv("LLM_PROVIDER") or settings.LLM_PROVIDER
+    ).lower().strip()
+    groq_api_key = (os.getenv("GROQ_API_KEY") or settings.GROQ_API_KEY or "").strip()
+    groq_model = os.getenv("GROQ_MODEL") or settings.GROQ_MODEL or "openai/gpt-oss-20b"
+    ollama_model = os.getenv("OLLAMA_MODEL") or settings.OLLAMA_MODEL or "qwen2.5:latest"
+    disable_ollama = os.getenv("DISABLE_OLLAMA", "").lower() in ("1", "true", "yes")
 
     answer = None
     model_used = None
 
     if provider_choice == "groq":
-        if settings.GROQ_API_KEY:
+        if groq_api_key:
             print(f"Routing request to Groq Cloud ({groq_model})...")
             answer = generate_groq_answer(
-                prompt=query, system_message=formatted_system_prompt
+                prompt=query,
+                system_message=formatted_system_prompt,
+                model=groq_model,
             )
             if answer:
                 model_used = groq_model
         else:
-            print("No GROQ_API_KEY found in config. Defaulting to local Ollama...")
+            print("No GROQ_API_KEY found in config or environment.")
 
-    # Automatic fallback to local Ollama if Groq wasn't chosen, failed, or lacked an API key
-    if not answer:
+    # Automatic fallback to local Ollama unless disabled in cloud mode
+    if not answer and not disable_ollama:
         print(f"Routing request to Local Ollama ({ollama_model})...")
         try:
             provider = OllamaProvider()
@@ -70,11 +76,13 @@ def answer_question(
                 model_used = f"{ollama_model}{suffix}"
         except Exception as exc:
             print(f"Local Ollama Error: {exc}")
-            answer = (
-                "Could not reach Groq or local Ollama. "
-                "Check your API key or ensure Ollama is running. Retrieved passages are shown below."
-            )
-            model_used = None
+
+    if not answer:
+        answer = (
+            "Could not reach Groq or local Ollama. "
+            "Check your API key or ensure Ollama is running. Retrieved passages are shown below."
+        )
+        model_used = None
 
     return {
         "answer": answer,
